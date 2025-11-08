@@ -1,0 +1,31 @@
+[render] 2025-11-08T22:37:26+00:00
+Rendering nala_sinephro_ambient.csd
+Output file: build/output.wav
+Command: csound -d -o "build/output.wav" "nala_sinephro_ambient.csd"
+------------------------------------------------------------
+UnifiedCSD:  nala_sinephro_ambient.csd
+--Csound version 6.18 (double samples) 2024-04-07
+[commit: none]
+[mlibsndfile-1.2.2
+[msr = 48000.0,[m kr = 100.000,[m ksmps = 480
+[m0dBFS level = 0.5,[m A4 tuning = 440.0
+[maudio buffered in 256 sample-frame blocks
+[mwriting 1024-byte blks of shorts to build/output.wav (WAV)
+SECTION 1:
+[mScore finished in csoundPerform().
+end of score.		   overall amps:[m  0.37348  0.32999
+	   overall samples out of range:[m        0[m        0[m
+0 errors in performance
+[m512 1024 sample blks of shorts written to build/output.wav (WAV)
+------------------------------------------------------------
+Validating rendered audio
+Audio metadata:
+  Sample rate     : 48000 Hz
+  Channels        : 2
+  Sample width    : 16 bits
+  Frame count     : 2880000
+  Duration        : 60.000 s
+  Peak amplitude  : 0.7470 ( -2.53 dBFS )
+Validation PASSED with all checks inside expected bounds.
+
+

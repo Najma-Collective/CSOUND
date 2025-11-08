@@ -1,0 +1,18 @@
+[syntax-check] 2025-11-08T22:37:21+00:00
+Checking syntax for: nala_sinephro_ambient.csd
+Command: csound -c "nala_sinephro_ambient.csd"
+------------------------------------------------------------
+UnifiedCSD:  nala_sinephro_ambient.csd
+--Csound version 6.18 (double samples) 2024-04-07
+[commit: none]
+[mlibsndfile-1.2.2
+[msr = 48000.0,[m kr = 100.000,[m ksmps = 480
+[m0dBFS level = 0.5,[m A4 tuning = 440.0
+[maudio buffered in 256 sample-frame blocks
+[mnot writing to sound disk
+SECTION 1:
+[mScore finished in csoundPerform().
+end of score.		   overall amps:[m  0.37348  0.33325
+	   overall samples out of range:[m        0[m        0[m
+0 errors in performance
+[m
