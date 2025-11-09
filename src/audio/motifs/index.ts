@@ -22,15 +22,19 @@ export type MotifLayeringOptions = {
   chordDurationSeconds?: number;
 };
 
+export type MotifLayerKey = "risingHope" | "gentleInquiry" | "shimmeringCascade";
+
 export type MotifLayerManager = {
   start: () => void;
   stop: () => void;
   getActiveChord: () => ProgressionChord;
-  handles: {
-    risingHope: MotifHandle;
-    gentleInquiry: MotifHandle;
-    shimmeringCascade: MotifHandle;
-  };
+  handles: Record<MotifLayerKey, MotifHandle>;
+  setIntensity: (
+    layer: MotifLayerKey,
+    intensity: number,
+    rampSeconds?: number,
+  ) => void;
+  setGlobalIntensity: (intensity: number, rampSeconds?: number) => void;
 };
 
 export function createMotifLayerManager(options: MotifLayeringOptions = {}): MotifLayerManager {
@@ -60,7 +64,7 @@ export function createMotifLayerManager(options: MotifLayeringOptions = {}): Mot
     getChord: getChordNotes,
   });
 
-  const handles = {
+  const handles: Record<MotifLayerKey, MotifHandle> = {
     risingHope: risingHopeHandle,
     gentleInquiry: gentleInquiryHandle,
     shimmeringCascade: shimmeringCascadeHandle,
@@ -71,6 +75,19 @@ export function createMotifLayerManager(options: MotifLayeringOptions = {}): Mot
   const advanceChord = () => {
     chordIndex = (chordIndex + 1) % PROGRESSION.length;
     currentChord = PROGRESSION[chordIndex];
+  };
+
+  const scheduleIntensity = (
+    handle: MotifHandle,
+    intensity: number,
+    rampSeconds: number,
+  ) => {
+    const context = handle.output.context;
+    const now = context.currentTime;
+    const duration = clamp(rampSeconds, 0.05, 6);
+    handle.output.gain.cancelScheduledValues(now);
+    handle.output.gain.setValueAtTime(handle.output.gain.value, now);
+    handle.output.gain.linearRampToValueAtTime(intensity, now + duration);
   };
 
   return {
@@ -111,5 +128,15 @@ export function createMotifLayerManager(options: MotifLayeringOptions = {}): Mot
       }
     },
     getActiveChord: () => currentChord,
+    setIntensity: (layer, intensity, rampSeconds = 0.8) => {
+      const handle = handles[layer];
+      scheduleIntensity(handle, clamp(intensity, 0, 1.5), rampSeconds);
+    },
+    setGlobalIntensity: (intensity, rampSeconds = 0.8) => {
+      const clamped = clamp(intensity, 0, 1.5);
+      (Object.keys(handles) as Array<keyof typeof handles>).forEach((key) => {
+        scheduleIntensity(handles[key], clamped, rampSeconds);
+      });
+    },
   };
 }
