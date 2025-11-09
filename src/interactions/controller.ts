@@ -155,6 +155,8 @@ export class InteractionController {
     this.activeDrag = null;
     this.lastWorldPoint.copy(worldPoint);
 
+    void this.maybeStartMotifs();
+
     try {
       this.canvas.setPointerCapture(event.pointerId);
     } catch (error) {
@@ -172,7 +174,6 @@ export class InteractionController {
       this.activeDrag = "fauna";
       this.lastFaunaInteraction = now - config.fauna.cooldownMs;
       this.faunaDelta.setScalar(0);
-      this.maybeStartMotifs();
       this.floraHoverTarget = 0;
     } else {
       this.activeDrag = "background";
