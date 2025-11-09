@@ -98,6 +98,9 @@ export class InteractionController {
 
   private lastBackgroundTelemetry = 0;
 
+  private readonly supportsPointerEvents =
+    typeof window !== "undefined" && "PointerEvent" in window;
+
   constructor(options: InteractionControllerOptions) {
     this.canvas = options.canvas;
     this.camera = options.camera;
@@ -129,11 +132,24 @@ export class InteractionController {
   }
 
   private attachListeners(): void {
-    this.canvas.addEventListener("pointerdown", this.handlePointerDown);
-    this.canvas.addEventListener("pointermove", this.handlePointerMove);
-    this.canvas.addEventListener("pointerleave", this.handlePointerUp);
-    window.addEventListener("pointerup", this.handlePointerUp);
-    window.addEventListener("pointercancel", this.handlePointerUp);
+    if (this.supportsPointerEvents) {
+      this.canvas.addEventListener("pointerdown", this.handlePointerDown);
+      this.canvas.addEventListener("pointermove", this.handlePointerMove);
+      this.canvas.addEventListener("pointerleave", this.handlePointerUp);
+      window.addEventListener("pointerup", this.handlePointerUp);
+      window.addEventListener("pointercancel", this.handlePointerUp);
+      return;
+    }
+
+    this.canvas.addEventListener("mousedown", this.handleMouseDown);
+    this.canvas.addEventListener("mousemove", this.handleMouseMove);
+    this.canvas.addEventListener("mouseleave", this.handleMouseUp);
+    window.addEventListener("mouseup", this.handleMouseUp);
+
+    this.canvas.addEventListener("touchstart", this.handleTouchStart, { passive: false });
+    this.canvas.addEventListener("touchmove", this.handleTouchMove, { passive: false });
+    window.addEventListener("touchend", this.handleTouchEnd, { passive: false });
+    window.addEventListener("touchcancel", this.handleTouchEnd, { passive: false });
   }
 
   private detachListeners(): void {
@@ -142,25 +158,48 @@ export class InteractionController {
       this.backgroundEaseHandle = null;
     }
 
-    this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
-    this.canvas.removeEventListener("pointermove", this.handlePointerMove);
-    this.canvas.removeEventListener("pointerleave", this.handlePointerUp);
-    window.removeEventListener("pointerup", this.handlePointerUp);
-    window.removeEventListener("pointercancel", this.handlePointerUp);
+    if (this.supportsPointerEvents) {
+      this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+      this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+      this.canvas.removeEventListener("pointerleave", this.handlePointerUp);
+      window.removeEventListener("pointerup", this.handlePointerUp);
+      window.removeEventListener("pointercancel", this.handlePointerUp);
+      return;
+    }
+
+    this.canvas.removeEventListener("mousedown", this.handleMouseDown);
+    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
+    this.canvas.removeEventListener("mouseleave", this.handleMouseUp);
+    window.removeEventListener("mouseup", this.handleMouseUp);
+
+    this.canvas.removeEventListener("touchstart", this.handleTouchStart);
+    this.canvas.removeEventListener("touchmove", this.handleTouchMove);
+    window.removeEventListener("touchend", this.handleTouchEnd);
+    window.removeEventListener("touchcancel", this.handleTouchEnd);
   }
 
   private handlePointerDown = (event: PointerEvent) => {
-    const worldPoint = this.projectToWorld(event);
+    this.handlePointerDownInternal(event);
+  };
+
+  private handlePointerDownInternal = (event: {
+    clientX: number;
+    clientY: number;
+    pointerId?: number;
+  }) => {
+    const worldPoint = this.projectToWorld(event.clientX, event.clientY);
     this.pointerDown = true;
     this.activeDrag = null;
     this.lastWorldPoint.copy(worldPoint);
 
     void this.maybeStartMotifs();
 
-    try {
-      this.canvas.setPointerCapture(event.pointerId);
-    } catch (error) {
-      // Some environments do not support setPointerCapture (e.g., Safari canvas fallback).
+    if (typeof event.pointerId === "number" && "setPointerCapture" in this.canvas) {
+      try {
+        this.canvas.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // Some environments do not support setPointerCapture (e.g., Safari canvas fallback).
+      }
     }
 
     const nearest = this.findNearestEntity(worldPoint);
@@ -186,7 +225,11 @@ export class InteractionController {
   };
 
   private handlePointerMove = (event: PointerEvent) => {
-    const worldPoint = this.projectToWorld(event);
+    this.handlePointerMoveInternal(event);
+  };
+
+  private handlePointerMoveInternal = (event: { clientX: number; clientY: number }) => {
+    const worldPoint = this.projectToWorld(event.clientX, event.clientY);
     const config = getInteractionConfig();
     const now = performance.now();
 
@@ -277,7 +320,11 @@ export class InteractionController {
   };
 
   private handlePointerUp = (event: PointerEvent) => {
-    if (this.pointerDown) {
+    this.handlePointerUpInternal(event);
+  };
+
+  private handlePointerUpInternal = (event: { pointerId?: number }) => {
+    if (this.pointerDown && typeof event.pointerId === "number" && "releasePointerCapture" in this.canvas) {
       try {
         this.canvas.releasePointerCapture(event.pointerId);
       } catch (error) {
@@ -295,10 +342,69 @@ export class InteractionController {
     this.updateGentleInquiryLevel(config);
   };
 
-  private projectToWorld(event: PointerEvent): THREE.Vector3 {
+  private handleMouseDown = (event: MouseEvent) => {
+    event.preventDefault();
+    this.handlePointerDownInternal({ clientX: event.clientX, clientY: event.clientY });
+  };
+
+  private handleMouseMove = (event: MouseEvent) => {
+    this.handlePointerMoveInternal({ clientX: event.clientX, clientY: event.clientY });
+  };
+
+  private handleMouseUp = (_event: MouseEvent) => {
+    this.handlePointerUpInternal({});
+  };
+
+  private extractTouchPoint(event: TouchEvent):
+    | { clientX: number; clientY: number; identifier: number }
+    | null {
+    if (event.changedTouches && event.changedTouches.length > 0) {
+      const touch = event.changedTouches[0];
+      return { clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier };
+    }
+
+    if (event.touches && event.touches.length > 0) {
+      const touch = event.touches[0];
+      return { clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier };
+    }
+
+    return null;
+  }
+
+  private handleTouchStart = (event: TouchEvent) => {
+    const touch = this.extractTouchPoint(event);
+    if (!touch) {
+      return;
+    }
+
+    event.preventDefault();
+    this.handlePointerDownInternal({
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      pointerId: touch.identifier,
+    });
+  };
+
+  private handleTouchMove = (event: TouchEvent) => {
+    const touch = this.extractTouchPoint(event);
+    if (!touch) {
+      return;
+    }
+
+    event.preventDefault();
+    this.handlePointerMoveInternal({ clientX: touch.clientX, clientY: touch.clientY });
+  };
+
+  private handleTouchEnd = (event: TouchEvent) => {
+    const touch = this.extractTouchPoint(event);
+    event.preventDefault();
+    this.handlePointerUpInternal({ pointerId: touch?.identifier });
+  };
+
+  private projectToWorld(clientX: number, clientY: number): THREE.Vector3 {
     const rect = this.canvas.getBoundingClientRect();
-    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+    this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -(((clientY - rect.top) / rect.height) * 2 - 1);
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const intersection = new THREE.Vector3();
