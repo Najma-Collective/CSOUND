@@ -1,4 +1,5 @@
 import { getAudioContext, getMasterGain } from "./context";
+import { registerDebugSpatialEmitter } from "./debugTools";
 
 type NoiseType = "white" | "pink" | "brown";
 
@@ -31,6 +32,8 @@ type PannerOptions = {
   coneInnerAngle?: number;
   coneOuterAngle?: number;
   coneOuterGain?: number;
+  debugId?: string;
+  enableDebugTracking?: boolean;
 };
 
 function connectToMaster(node: AudioNode): void {
@@ -210,6 +213,7 @@ export async function loadConvolutionReverb(
 export function createSpatialPanner(options: PannerOptions = {}): {
   panner: PannerNode;
   output: GainNode;
+  unregisterDebug?: () => void;
 } {
   const context = getAudioContext();
   const panner = context.createPanner();
@@ -254,6 +258,11 @@ export function createSpatialPanner(options: PannerOptions = {}): {
   panner.connect(output);
   connectToMaster(output);
 
-  return { panner, output };
+  let unregisterDebug: (() => void) | undefined;
+  if (options.enableDebugTracking !== false) {
+    unregisterDebug = registerDebugSpatialEmitter(panner, options.debugId);
+  }
+
+  return { panner, output, unregisterDebug };
 }
 

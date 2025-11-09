@@ -1,0 +1,7 @@
+node_modules/
+
+# Vitest caches
+.vitest/
+
+# Editor artifacts
+.DS_Store
