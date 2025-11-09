@@ -98,9 +98,13 @@ export function getAnalysers(): { pre: AnalyserNode; post: AnalyserNode } {
   return { pre: preAnalyser, post: postAnalyser };
 }
 
+type ExtendedAudioContextState = AudioContextState | "interrupted";
+
 export async function resumeAudio(): Promise<void> {
   const { context } = ensureAudioGraph();
-  if (context.state === "suspended") {
+  const state = context.state as ExtendedAudioContextState;
+
+  if (state === "suspended" || state === "interrupted") {
     await context.resume();
   }
 }

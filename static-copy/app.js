@@ -20483,7 +20483,8 @@ function getAnalysers() {
 }
 async function resumeAudio() {
   const { context } = ensureAudioGraph();
-  if (context.state === "suspended") {
+  const state2 = context.state;
+  if (state2 === "suspended" || state2 === "interrupted") {
     await context.resume();
   }
 }
@@ -20703,6 +20704,7 @@ var InteractionController = class {
     this.pointerDown = false;
     this.activeDrag = null;
     this.motifsStarted = false;
+    this.motifStartPending = false;
     this.lastFloraInteraction = 0;
     this.lastFaunaInteraction = 0;
     this.lastBackgroundInteraction = 0;
@@ -20711,14 +20713,21 @@ var InteractionController = class {
     this.gentleInquiryLevel = 0;
     this.lastFaunaTelemetry = 0;
     this.lastBackgroundTelemetry = 0;
+    this.supportsPointerEvents = typeof window !== "undefined" && "PointerEvent" in window;
     this.handlePointerDown = (event) => {
-      const worldPoint = this.projectToWorld(event);
+      this.handlePointerDownInternal(event);
+    };
+    this.handlePointerDownInternal = (event) => {
+      const worldPoint = this.projectToWorld(event.clientX, event.clientY);
       this.pointerDown = true;
       this.activeDrag = null;
       this.lastWorldPoint.copy(worldPoint);
-      try {
-        this.canvas.setPointerCapture(event.pointerId);
-      } catch (error) {
+      void this.maybeStartMotifs();
+      if (typeof event.pointerId === "number" && "setPointerCapture" in this.canvas) {
+        try {
+          this.canvas.setPointerCapture(event.pointerId);
+        } catch (error) {
+        }
       }
       const nearest = this.findNearestEntity(worldPoint);
       const config = getInteractionConfig();
@@ -20730,7 +20739,6 @@ var InteractionController = class {
         this.activeDrag = "fauna";
         this.lastFaunaInteraction = now3 - config.fauna.cooldownMs;
         this.faunaDelta.setScalar(0);
-        this.maybeStartMotifs();
         this.floraHoverTarget = 0;
       } else {
         this.activeDrag = "background";
@@ -20741,7 +20749,10 @@ var InteractionController = class {
       this.updateGentleInquiryLevel(config);
     };
     this.handlePointerMove = (event) => {
-      const worldPoint = this.projectToWorld(event);
+      this.handlePointerMoveInternal(event);
+    };
+    this.handlePointerMoveInternal = (event) => {
+      const worldPoint = this.projectToWorld(event.clientX, event.clientY);
       const config = getInteractionConfig();
       const now3 = performance.now();
       if (!this.pointerDown) {
@@ -20820,7 +20831,10 @@ var InteractionController = class {
       this.lastWorldPoint.copy(worldPoint);
     };
     this.handlePointerUp = (event) => {
-      if (this.pointerDown) {
+      this.handlePointerUpInternal(event);
+    };
+    this.handlePointerUpInternal = (event) => {
+      if (this.pointerDown && typeof event.pointerId === "number" && "releasePointerCapture" in this.canvas) {
         try {
           this.canvas.releasePointerCapture(event.pointerId);
         } catch (error) {
@@ -20834,6 +20848,41 @@ var InteractionController = class {
       this.applyBackgroundState(config);
       this.floraHoverTarget = 0;
       this.updateGentleInquiryLevel(config);
+    };
+    this.handleMouseDown = (event) => {
+      event.preventDefault();
+      this.handlePointerDownInternal({ clientX: event.clientX, clientY: event.clientY });
+    };
+    this.handleMouseMove = (event) => {
+      this.handlePointerMoveInternal({ clientX: event.clientX, clientY: event.clientY });
+    };
+    this.handleMouseUp = (_event) => {
+      this.handlePointerUpInternal({});
+    };
+    this.handleTouchStart = (event) => {
+      const touch = this.extractTouchPoint(event);
+      if (!touch) {
+        return;
+      }
+      event.preventDefault();
+      this.handlePointerDownInternal({
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        pointerId: touch.identifier
+      });
+    };
+    this.handleTouchMove = (event) => {
+      const touch = this.extractTouchPoint(event);
+      if (!touch) {
+        return;
+      }
+      event.preventDefault();
+      this.handlePointerMoveInternal({ clientX: touch.clientX, clientY: touch.clientY });
+    };
+    this.handleTouchEnd = (event) => {
+      const touch = this.extractTouchPoint(event);
+      event.preventDefault();
+      this.handlePointerUpInternal({ pointerId: touch?.identifier });
     };
     this.canvas = options.canvas;
     this.camera = options.camera;
@@ -20859,27 +20908,60 @@ var InteractionController = class {
     this.detachListeners();
   }
   attachListeners() {
-    this.canvas.addEventListener("pointerdown", this.handlePointerDown);
-    this.canvas.addEventListener("pointermove", this.handlePointerMove);
-    this.canvas.addEventListener("pointerleave", this.handlePointerUp);
-    window.addEventListener("pointerup", this.handlePointerUp);
-    window.addEventListener("pointercancel", this.handlePointerUp);
+    if (this.supportsPointerEvents) {
+      this.canvas.addEventListener("pointerdown", this.handlePointerDown);
+      this.canvas.addEventListener("pointermove", this.handlePointerMove);
+      this.canvas.addEventListener("pointerleave", this.handlePointerUp);
+      window.addEventListener("pointerup", this.handlePointerUp);
+      window.addEventListener("pointercancel", this.handlePointerUp);
+      return;
+    }
+    this.canvas.addEventListener("mousedown", this.handleMouseDown);
+    this.canvas.addEventListener("mousemove", this.handleMouseMove);
+    this.canvas.addEventListener("mouseleave", this.handleMouseUp);
+    window.addEventListener("mouseup", this.handleMouseUp);
+    this.canvas.addEventListener("touchstart", this.handleTouchStart, { passive: false });
+    this.canvas.addEventListener("touchmove", this.handleTouchMove, { passive: false });
+    window.addEventListener("touchend", this.handleTouchEnd, { passive: false });
+    window.addEventListener("touchcancel", this.handleTouchEnd, { passive: false });
   }
   detachListeners() {
     if (this.backgroundEaseHandle !== null && typeof window !== "undefined") {
       window.cancelAnimationFrame(this.backgroundEaseHandle);
       this.backgroundEaseHandle = null;
     }
-    this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
-    this.canvas.removeEventListener("pointermove", this.handlePointerMove);
-    this.canvas.removeEventListener("pointerleave", this.handlePointerUp);
-    window.removeEventListener("pointerup", this.handlePointerUp);
-    window.removeEventListener("pointercancel", this.handlePointerUp);
+    if (this.supportsPointerEvents) {
+      this.canvas.removeEventListener("pointerdown", this.handlePointerDown);
+      this.canvas.removeEventListener("pointermove", this.handlePointerMove);
+      this.canvas.removeEventListener("pointerleave", this.handlePointerUp);
+      window.removeEventListener("pointerup", this.handlePointerUp);
+      window.removeEventListener("pointercancel", this.handlePointerUp);
+      return;
+    }
+    this.canvas.removeEventListener("mousedown", this.handleMouseDown);
+    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
+    this.canvas.removeEventListener("mouseleave", this.handleMouseUp);
+    window.removeEventListener("mouseup", this.handleMouseUp);
+    this.canvas.removeEventListener("touchstart", this.handleTouchStart);
+    this.canvas.removeEventListener("touchmove", this.handleTouchMove);
+    window.removeEventListener("touchend", this.handleTouchEnd);
+    window.removeEventListener("touchcancel", this.handleTouchEnd);
   }
-  projectToWorld(event) {
+  extractTouchPoint(event) {
+    if (event.changedTouches && event.changedTouches.length > 0) {
+      const touch = event.changedTouches[0];
+      return { clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier };
+    }
+    if (event.touches && event.touches.length > 0) {
+      const touch = event.touches[0];
+      return { clientX: touch.clientX, clientY: touch.clientY, identifier: touch.identifier };
+    }
+    return null;
+  }
+  projectToWorld(clientX, clientY) {
     const rect = this.canvas.getBoundingClientRect();
-    this.pointer.x = (event.clientX - rect.left) / rect.width * 2 - 1;
-    this.pointer.y = -((event.clientY - rect.top) / rect.height * 2 - 1);
+    this.pointer.x = (clientX - rect.left) / rect.width * 2 - 1;
+    this.pointer.y = -((clientY - rect.top) / rect.height * 2 - 1);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const intersection = new Vector3();
     this.raycaster.ray.intersectPlane(this.groundPlane, intersection);
@@ -21041,21 +21123,28 @@ var InteractionController = class {
     }
   }
   async maybeStartMotifs() {
-    if (this.motifsStarted) {
+    if (this.motifsStarted || this.motifStartPending) {
       return;
     }
-    this.motifsStarted = true;
+    this.motifStartPending = true;
     try {
       await resumeAudio();
     } catch (error) {
+      this.motifStartPending = false;
+      return;
     }
-    this.motifLayers.start();
-    emitTelemetryEvent({
-      name: "motif_started",
-      attributes: {
-        chord: this.motifLayers.getActiveChord().name
-      }
-    });
+    try {
+      this.motifLayers.start();
+      this.motifsStarted = true;
+      emitTelemetryEvent({
+        name: "motif_started",
+        attributes: {
+          chord: this.motifLayers.getActiveChord().name
+        }
+      });
+    } finally {
+      this.motifStartPending = false;
+    }
   }
   ensureBackgroundFilter() {
     if (this.backgroundFilter || this.backgroundFilterRequested) {
