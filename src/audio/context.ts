@@ -5,6 +5,7 @@ type AudioContextConstructor = typeof AudioContext;
 type AudioGraph = {
   context: AudioContext;
   masterGain: GainNode;
+  backgroundFilter: BiquadFilterNode;
   limiter: DynamicsCompressorNode;
   preAnalyser: AnalyserNode;
   postAnalyser: AnalyserNode;
@@ -36,6 +37,12 @@ function createAudioContext(): AudioGraph {
   limiter.attack.value = 0.003;
   limiter.release.value = 0.25;
 
+  const backgroundFilter = context.createBiquadFilter();
+  backgroundFilter.type = "lowpass";
+  backgroundFilter.frequency.value = 1600;
+  backgroundFilter.Q.value = 0.85;
+  backgroundFilter.gain.value = 0;
+
   const preAnalyser = context.createAnalyser();
   preAnalyser.fftSize = 2048;
   preAnalyser.smoothingTimeConstant = 0.8;
@@ -44,14 +51,16 @@ function createAudioContext(): AudioGraph {
   postAnalyser.fftSize = 2048;
   postAnalyser.smoothingTimeConstant = 0.8;
 
-  masterGain.connect(limiter);
-  masterGain.connect(preAnalyser);
+  masterGain.connect(backgroundFilter);
+  backgroundFilter.connect(limiter);
+  backgroundFilter.connect(preAnalyser);
   limiter.connect(context.destination);
   limiter.connect(postAnalyser);
 
   audioGraph = {
     context,
     masterGain,
+    backgroundFilter,
     limiter,
     preAnalyser,
     postAnalyser,
@@ -74,6 +83,10 @@ export function getAudioContext(): AudioContext {
 
 export function getMasterGain(): GainNode {
   return ensureAudioGraph().masterGain;
+}
+
+export function getBackgroundFilter(): BiquadFilterNode {
+  return ensureAudioGraph().backgroundFilter;
 }
 
 export function getLimiter(): DynamicsCompressorNode {
@@ -104,9 +117,10 @@ export function disposeAudioContext(): void {
     return;
   }
 
-  const { context, masterGain, limiter, preAnalyser, postAnalyser } = audioGraph;
+  const { context, masterGain, backgroundFilter, limiter, preAnalyser, postAnalyser } = audioGraph;
 
   masterGain.disconnect();
+  backgroundFilter.disconnect();
   limiter.disconnect();
   preAnalyser.disconnect();
   postAnalyser.disconnect();

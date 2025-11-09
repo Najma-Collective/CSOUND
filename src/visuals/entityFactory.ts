@@ -98,6 +98,14 @@ export class EntityFactory {
     this.faunaEntities.forEach((fauna) => fauna.update(elapsed));
   }
 
+  getFloraEntities(): readonly FloraEntity[] {
+    return this.floraEntities;
+  }
+
+  getFaunaEntities(): readonly FaunaEntity[] {
+    return this.faunaEntities;
+  }
+
   triggerBlooming(): void {
     this.floraEntities.forEach((flora) => flora.onInteraction?.('bloom'));
   }
