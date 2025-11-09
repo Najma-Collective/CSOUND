@@ -21,14 +21,39 @@ export interface TelemetryConfig {
   debug?: boolean;
 }
 
-interface ImportMetaWithEnv extends ImportMeta {
-  env?: Record<string, string | undefined>;
+declare global {
+  interface ImportMeta {
+    readonly env: Record<string, string | undefined>;
+  }
 }
 
+const importMetaEnvironment = (() => {
+  try {
+    return import.meta.env.CSOUND_ENVIRONMENT;
+  } catch {
+    return undefined;
+  }
+})();
+
+const importMetaEndpoint = (() => {
+  try {
+    return import.meta.env.CSOUND_TELEMETRY_ENDPOINT;
+  } catch {
+    return undefined;
+  }
+})();
+
+const importMetaSampleRate = (() => {
+  try {
+    return import.meta.env.CSOUND_TELEMETRY_SAMPLE_RATE;
+  } catch {
+    return undefined;
+  }
+})();
+
 function resolveEnvironment(): TelemetryEnvironment {
-  const importMetaEnv = (import.meta as ImportMetaWithEnv).env ?? {};
   const raw =
-    importMetaEnv.CSOUND_ENVIRONMENT ??
+    importMetaEnvironment ??
     (typeof process !== "undefined" ? process.env?.CSOUND_ENVIRONMENT : undefined) ??
     "staging";
   const normalized = raw.toLowerCase();
@@ -36,18 +61,16 @@ function resolveEnvironment(): TelemetryEnvironment {
 }
 
 function resolveEndpoint(): string {
-  const importMetaEnv = (import.meta as ImportMetaWithEnv).env ?? {};
   return (
-    importMetaEnv.CSOUND_TELEMETRY_ENDPOINT ??
+    importMetaEndpoint ??
     (typeof process !== "undefined" ? process.env?.CSOUND_TELEMETRY_ENDPOINT : undefined) ??
     ""
   );
 }
 
 function resolveSampleRate(): number {
-  const importMetaEnv = (import.meta as ImportMetaWithEnv).env ?? {};
   const raw =
-    importMetaEnv.CSOUND_TELEMETRY_SAMPLE_RATE ??
+    importMetaSampleRate ??
     (typeof process !== "undefined" ? process.env?.CSOUND_TELEMETRY_SAMPLE_RATE : undefined);
   if (!raw) return 1;
   const parsed = Number.parseFloat(raw);
