@@ -8,6 +8,7 @@ import {
   clampInteractionValue,
   getInteractionConfig,
 } from "./config";
+import { emitTelemetryEvent } from "./telemetry";
 
 export interface InteractionControllerOptions {
   canvas: HTMLCanvasElement;
@@ -93,6 +94,10 @@ export class InteractionController {
 
   private gentleInquiryLevel = 0;
 
+  private lastFaunaTelemetry = 0;
+
+  private lastBackgroundTelemetry = 0;
+
   constructor(options: InteractionControllerOptions) {
     this.canvas = options.canvas;
     this.camera = options.camera;
@@ -109,6 +114,14 @@ export class InteractionController {
     }
 
     this.attachListeners();
+
+    emitTelemetryEvent({
+      name: "session_start",
+      attributes: {
+        floraClusters: this.entityFactory.getFloraEntities().length,
+        faunaFlocks: this.entityFactory.getFaunaEntities().length,
+      },
+    });
   }
 
   dispose(): void {
@@ -224,6 +237,18 @@ export class InteractionController {
       this.entityFactory.triggerTrajectoryShift(this.faunaDelta);
       this.updateFaunaMotifs(config, this.faunaDelta.length() / maxDrag);
       this.lastFaunaInteraction = now;
+
+      if (now - this.lastFaunaTelemetry > 1500) {
+        this.lastFaunaTelemetry = now;
+        emitTelemetryEvent({
+          name: "fauna_drag",
+          attributes: {
+            dragMagnitude: Number(this.faunaDelta.length().toFixed(3)),
+            normalized: Number((this.faunaDelta.length() / maxDrag).toFixed(3)),
+            faunaCount: this.entityFactory.getFaunaEntities().length,
+          },
+        });
+      }
     } else if (this.activeDrag === "background") {
       if (now - this.lastBackgroundInteraction >= config.background.cooldownMs) {
         const delta = worldPoint.clone().sub(this.backgroundReference);
@@ -233,6 +258,17 @@ export class InteractionController {
         this.backgroundTarget.light = normalizedZ;
         this.applyBackgroundState(config);
         this.lastBackgroundInteraction = now;
+
+        if (now - this.lastBackgroundTelemetry > 2000) {
+          this.lastBackgroundTelemetry = now;
+          emitTelemetryEvent({
+            name: "background_shift",
+            attributes: {
+              hueOffset: Number(this.backgroundTarget.hue.toFixed(3)),
+              lightOffset: Number(this.backgroundTarget.light.toFixed(3)),
+            },
+          });
+        }
       }
     }
 
@@ -310,6 +346,15 @@ export class InteractionController {
 
     const bloomIntensity = THREE.MathUtils.lerp(0.4, 0.9, this.floraHoverTarget);
     this.motifLayers.setIntensity("gentleInquiry", bloomIntensity, config.flora.motifFadeSeconds);
+
+    emitTelemetryEvent({
+      name: "flora_bloom",
+      attributes: {
+        hoverStrength: Number(this.floraHoverTarget.toFixed(3)),
+        bloomIntensity: Number(bloomIntensity.toFixed(3)),
+        floraCount: this.entityFactory.getFloraEntities().length,
+      },
+    });
   }
 
   private updateGentleInquiryLevel(config: ReturnType<typeof getInteractionConfig>): void {
@@ -448,6 +493,13 @@ export class InteractionController {
       // Ignore resume errors (e.g., environment without Web Audio).
     }
     this.motifLayers.start();
+
+    emitTelemetryEvent({
+      name: "motif_started",
+      attributes: {
+        chord: this.motifLayers.getActiveChord().name,
+      },
+    });
   }
 
   private ensureBackgroundFilter(): BiquadFilterNode | null {

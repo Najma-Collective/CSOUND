@@ -3,11 +3,20 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "build": "node scripts/build.mjs",
+    "optimize:assets": "node scripts/optimize-assets.mjs",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "three": "^0.164.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
+    "dotenv": "^16.4.5",
+    "esbuild": "^0.21.4",
     "jsdom": "^27.1.0",
+    "netlify-cli": "^17.17.1",
     "typescript": "^5.4.5",
     "vitest": "^1.5.2"
   }
