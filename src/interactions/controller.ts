@@ -82,6 +82,8 @@ export class InteractionController {
 
   private motifsStarted = false;
 
+  private motifStartPending = false;
+
   private lastFloraInteraction = 0;
 
   private lastFaunaInteraction = 0;
@@ -589,24 +591,33 @@ export class InteractionController {
   }
 
   private async maybeStartMotifs(): Promise<void> {
-    if (this.motifsStarted) {
+    if (this.motifsStarted || this.motifStartPending) {
       return;
     }
 
-    this.motifsStarted = true;
+    this.motifStartPending = true;
+
     try {
       await resumeAudio();
     } catch (error) {
       // Ignore resume errors (e.g., environment without Web Audio).
+      this.motifStartPending = false;
+      return;
     }
-    this.motifLayers.start();
 
-    emitTelemetryEvent({
-      name: "motif_started",
-      attributes: {
-        chord: this.motifLayers.getActiveChord().name,
-      },
-    });
+    try {
+      this.motifLayers.start();
+      this.motifsStarted = true;
+
+      emitTelemetryEvent({
+        name: "motif_started",
+        attributes: {
+          chord: this.motifLayers.getActiveChord().name,
+        },
+      });
+    } finally {
+      this.motifStartPending = false;
+    }
   }
 
   private ensureBackgroundFilter(): BiquadFilterNode | null {
