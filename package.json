@@ -5,6 +5,7 @@
   "scripts": {
     "test": "vitest",
     "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
     "optimize:assets": "node scripts/optimize-assets.mjs",
     "deploy": "bash scripts/deploy.sh"
   },
