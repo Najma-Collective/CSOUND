@@ -1,0 +1,14 @@
+{
+  "name": "csound",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "jsdom": "^27.1.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.5.2"
+  }
+}
