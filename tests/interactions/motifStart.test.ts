@@ -54,6 +54,12 @@ describe("InteractionController audio startup", () => {
     const motifStart = vi.fn();
     const motifLayers = createMotifLayerManagerStub(motifStart);
 
+    const sanityHandler = vi.fn();
+    document.addEventListener("mousedown", sanityHandler);
+    document.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    expect(sanityHandler).toHaveBeenCalledTimes(1);
+    document.removeEventListener("mousedown", sanityHandler);
+
     const controller = new InteractionController({
       canvas: document.createElement("canvas"),
       camera: new THREE.PerspectiveCamera(),
@@ -80,5 +86,51 @@ describe("InteractionController audio startup", () => {
     expect(motifStart).toHaveBeenCalledTimes(1);
 
     controller.dispose();
+  });
+
+  it("starts motifs when a global activation event occurs", async () => {
+    resumeAudioMock.mockResolvedValue(undefined);
+
+    const motifStart = vi.fn();
+    const motifLayers = createMotifLayerManagerStub(motifStart);
+    const addEventSpy = vi.spyOn(document, "addEventListener");
+
+    const controller = new InteractionController({
+      canvas: document.createElement("canvas"),
+      camera: new THREE.PerspectiveCamera(),
+      scene: new THREE.Scene(),
+      entityFactory: createEntityFactoryStub(),
+      motifLayers,
+    });
+
+    const controllerInternals = controller as unknown as {
+      removeAudioActivationListeners: (() => void) | null;
+      handleAudioActivation: () => void;
+    };
+
+    const expectedType = "PointerEvent" in window ? "pointerdown" : "mousedown";
+
+    const hasActivationListener = addEventSpy.mock.calls.some(([type, listener, options]) => {
+      if (type !== expectedType) {
+        return false;
+      }
+      const typedOptions = options as AddEventListenerOptions | undefined;
+      return listener === controllerInternals.handleAudioActivation && typedOptions?.capture === true;
+    });
+
+    expect(hasActivationListener).toBe(true);
+    expect(controllerInternals.removeAudioActivationListeners).not.toBeNull();
+
+    controllerInternals.handleAudioActivation();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await vi.waitFor(() => {
+      expect(resumeAudioMock).toHaveBeenCalledTimes(1);
+      expect(motifStart).toHaveBeenCalledTimes(1);
+    });
+
+    controller.dispose();
+    addEventSpy.mockRestore();
   });
 });

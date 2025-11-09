@@ -103,6 +103,12 @@ export class InteractionController {
   private readonly supportsPointerEvents =
     typeof window !== "undefined" && "PointerEvent" in window;
 
+  private readonly handleAudioActivation = () => {
+    void this.maybeStartMotifs();
+  };
+
+  private removeAudioActivationListeners: (() => void) | null = null;
+
   constructor(options: InteractionControllerOptions) {
     this.canvas = options.canvas;
     this.camera = options.camera;
@@ -119,6 +125,7 @@ export class InteractionController {
     }
 
     this.attachListeners();
+    this.attachAudioActivationListeners();
 
     emitTelemetryEvent({
       name: "session_start",
@@ -131,6 +138,8 @@ export class InteractionController {
 
   dispose(): void {
     this.detachListeners();
+    this.removeAudioActivationListeners?.();
+    this.removeAudioActivationListeners = null;
   }
 
   private attachListeners(): void {
@@ -178,6 +187,45 @@ export class InteractionController {
     this.canvas.removeEventListener("touchmove", this.handleTouchMove);
     window.removeEventListener("touchend", this.handleTouchEnd);
     window.removeEventListener("touchcancel", this.handleTouchEnd);
+  }
+
+  private attachAudioActivationListeners(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const cleanupCallbacks: Array<() => void> = [];
+    const handler = this.handleAudioActivation;
+
+    const addListener = (
+      target: EventTarget | null | undefined,
+      type: string,
+      options?: AddEventListenerOptions,
+    ) => {
+      if (!target) {
+        return;
+      }
+      target.addEventListener(type, handler, options);
+      cleanupCallbacks.push(() => target.removeEventListener(type, handler, options));
+    };
+
+    const documentRef = typeof document !== "undefined" ? document : null;
+    const primaryTarget: EventTarget = documentRef ?? window;
+
+    addListener(primaryTarget, "keydown", { capture: true });
+
+    if (this.supportsPointerEvents) {
+      addListener(primaryTarget, "pointerdown", { capture: true });
+    } else {
+      addListener(primaryTarget, "mousedown", { capture: true });
+      addListener(primaryTarget, "touchstart", { passive: true, capture: true });
+      addListener(primaryTarget, "touchend", { passive: true, capture: true });
+    }
+
+    this.removeAudioActivationListeners = () => {
+      cleanupCallbacks.forEach((cleanup) => cleanup());
+      this.removeAudioActivationListeners = null;
+    };
   }
 
   private handlePointerDown = (event: PointerEvent) => {
@@ -608,6 +656,8 @@ export class InteractionController {
     try {
       this.motifLayers.start();
       this.motifsStarted = true;
+      this.removeAudioActivationListeners?.();
+      this.removeAudioActivationListeners = null;
 
       emitTelemetryEvent({
         name: "motif_started",
