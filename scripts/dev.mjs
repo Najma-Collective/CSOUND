@@ -4,6 +4,8 @@ import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+import { writeIndexHtml } from "./utils/write-index-html.mjs";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
@@ -47,6 +49,7 @@ async function run() {
   }
 
   await ensureDistDir();
+  await writeIndexHtml(distDir);
 
   const requestedPort = Number.parseInt(
     process.env.PORT ?? process.env.DEV_SERVER_PORT ?? "5173",
